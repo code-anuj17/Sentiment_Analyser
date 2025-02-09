@@ -1,15 +1,30 @@
 import streamlit as st
-from joblib import load
-import nltk
-from nltk.stem import PorterStemmer, WordNetLemmatizer
+import tensorflow as tf
+import spacy
+import numpy as np
 
-# Download necessary NLTK data
-nltk.download("punkt", quiet=True)
-nltk.download("wordnet", quiet=True)
+# Load the model once to avoid reloading every function call
+model=tf.keras.models.load_model("modelv0.0.h5")
+
+
+
+# Load the model once to avoid reloading every function call
+nlp = spacy.load("en_core_web_lg", disable=["parser", "ner"])
+
+def get_review_vector(review):
+    doc = nlp(review)  # Process single text, not using `pipe`
+    return doc.vector.reshape(1, -1)  # Ensure it's a (1, embedding_dim) array
+
+def get_sentiment(review):
+    vec=get_review_vector(review)
+    return np.argmax(model.predict(vec))
+
+
+
 
 # Set page configuration
 st.set_page_config(
-    page_title="Review Meter", 
+    page_title="Sentiment Analyser", 
     page_icon="📊",
     layout="centered"
 )
@@ -148,29 +163,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Caching model and vectorizer
-
-# Load model and vectorizer
-model, vectorizer = load("model_and_cv.pkl")
-
-# Preprocessing functions
-lemmatizer = WordNetLemmatizer()
-stemmer = PorterStemmer()
-
-def preprocess_review(txt):
-    """
-    Preprocess the review text by tokenizing, lemmatizing, and stemming
-    
-    Args:
-        txt (str): Input review text
-    
-    Returns:
-        str: Processed review text
-    """
-    tokens = nltk.word_tokenize(txt.lower())  # Tokenize and lowercase
-    lemmatized = [lemmatizer.lemmatize(w) for w in tokens]
-    stemmed = [stemmer.stem(w) for w in lemmatized]
-    return " ".join(stemmed)
 
 # Streamlit UI
 def main():
@@ -185,12 +177,12 @@ def main():
                 <path d="M9 7l3 3"></path>
                 <path d="M5 11l3 3"></path> 
             </svg>
-            Review Meter
+            Sentiment Analyser
         </div>
     </div>
     
     <div class="subtitle-container">
-        <h2>Predict Your Review Score</h2>
+        <h2>Predict Your Sentiment</h2>
     </div>
     """, unsafe_allow_html=True)
     
@@ -216,37 +208,31 @@ def main():
         if st.button("Predict Score", type="primary"):
             if review.strip():
                 try:
-                    # Preprocess the review
-                    processed_review = preprocess_review(review)
-                    
-                    # Vectorize the processed review
-                    review_vector = vectorizer.transform([processed_review]).toarray()
-                    
                     # Predict using the model
-                    score = round(model.predict(review_vector)[0], 1)
+                    score=get_sentiment(review)
                     
                     # Determine score category and styling
                     if score == 0:
                         score_class = "score-low"
-                        review_category="Negative"
+                        review_category = "Negative"
                         emoji = "😞"
                         feedback = "This review is negative. Try to provide more constructive feedback."
                     elif score == 1:
                         score_class = "score-medium"
-                        review_category="Neutral"
+                        review_category = "Neutral"
                         emoji = "😐"
                         feedback = "This review is neutral or mixed. Consider elaborating your points."
                     else:
                         score_class = "score-high"
-                        review_category="Positive"
+                        review_category = "Positive"
                         emoji = "😄"
                         feedback = "This is a very positive review! Keep up the great work."
                     
-                     # Display review category with custom styling
+                    # Display review category with custom styling
                     st.markdown(f"""
                     <div class="score-container {score_class}">
                         <div>
-                            {emoji} The Predicted Review is  {review_category}
+                            {emoji} The Predicted Review is {review_category}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
